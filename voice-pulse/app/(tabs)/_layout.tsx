@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, ShieldCheck, NotebookPen } from 'lucide-react-native';
+import { Home, MessageCircle, NotebookPen, ScrollText, ShieldCheck } from 'lucide-react-native';
 import { colors } from '../../theme';
 
 export default function TabsLayout() {
@@ -8,7 +8,8 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.muted,
+        tabBarInactiveTintColor: colors.subtle,
+        tabBarActiveBackgroundColor: colors.surfaceAlt,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -17,12 +18,24 @@ export default function TabsLayout() {
           paddingBottom: 10,
           paddingTop: 8,
         },
+        tabBarItemStyle: {
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginHorizontal: 2,
+          borderRadius: 12,
+        },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
+          textAlign: 'center',
+          lineHeight: 14,
+          marginTop: 2,
         },
         tabBarIconStyle: {
-          marginBottom: 2,
+          width: 24,
+          height: 24,
+          alignItems: 'center',
+          justifyContent: 'center',
         },
       }}
     >
@@ -31,6 +44,20 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="issues"
+        options={{
+          title: 'Issues',
+          tabBarIcon: ({ color, size }) => <ScrollText size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="helper"
+        options={{
+          title: 'Civic Helper',
+          tabBarIcon: ({ color, size }) => <MessageCircle size={size} color={color} />,
         }}
       />
       <Tabs.Screen

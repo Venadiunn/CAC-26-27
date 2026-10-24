@@ -21,3 +21,5 @@ Thumbs.db
 /CurrentRoster.csv
 /CurrentRoster.pdf
 /MemberRoster.csv
+.vercel
+.env*

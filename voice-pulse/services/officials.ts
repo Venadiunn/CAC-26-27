@@ -1,4 +1,5 @@
 import type { Official } from '../types';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
 const rosterCsv = `FirstName,LastName,LeadershipPositionCurrent,Party,Phone,Room,District,YearEnter,Floor,Gender,HomeTown
 Bill,Allen,,Republican,573-751-1218,235-BA,017,2022,2,M,Kansas City
@@ -195,7 +196,45 @@ export const missouriHouseOfficials: Official[] = parseCsv(rosterCsv)
   });
 
 export async function getOfficials(): Promise<Official[]> {
-  return missouriHouseOfficials;
+  if (process.env.EXPO_PUBLIC_USE_SEED_DATA !== 'false') {
+    return missouriHouseOfficials;
+  }
+
+  if (!supabase || !isSupabaseConfigured) {
+    throw new Error('Live officials are enabled, but Supabase is not configured.');
+  }
+
+  const { data, error } = await supabase
+    .from('officials')
+    .select('id, full_name, office_title, jurisdiction, level, email, phone, source_url, last_verified_on')
+    .eq('is_active', true)
+    .order('full_name');
+
+  if (error) {
+    throw new Error(`Could not load officials from Supabase: ${error.message}`);
+  }
+  if (!data?.length) {
+    return missouriHouseOfficials;
+  }
+
+  const validLevels = ['city', 'county', 'state', 'federal'];
+  return data.flatMap((row) => {
+    if (!validLevels.includes(row.level)) {
+      return [];
+    }
+
+    return [{
+      id: row.id,
+      fullName: row.full_name,
+      officeTitle: row.office_title ?? '',
+      jurisdiction: row.jurisdiction ?? '',
+      level: row.level as Official['level'],
+      email: row.email ?? '',
+      phone: row.phone ?? undefined,
+      sourceUrl: row.source_url ?? '',
+      lastVerifiedOn: row.last_verified_on ?? undefined,
+    }];
+  });
 }
 
 export async function getOfficialById(id: string): Promise<Official | undefined> {

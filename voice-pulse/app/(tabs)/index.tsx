@@ -1,86 +1,29 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Chip, Text, TextInput } from 'react-native-paper';
-import { getSavedArticles, removeSavedArticle, saveArticle } from '../../lib/storage';
+import { ArrowRight, Compass, Search, Sparkles } from 'lucide-react-native';
 import { ISSUE_CATEGORIES, searchIssues } from '../../services/issues';
-import { getNews } from '../../services/news';
 import { colors, layout, radii, shadows, spacing } from '../../theme';
-import type { Article } from '../../types';
 
 const categories = ['All', ...ISSUE_CATEGORIES];
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [articles, setArticles] = useState<Article[]>([]);
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [savedIds, setSavedIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadNews = async () => {
-    setLoading(true);
-    const feed = await getNews();
-    setArticles(feed);
-    setLoading(false);
-  };
-
-  const loadSaved = async () => {
-    const saved = await getSavedArticles<Article>();
-    setSavedIds(saved.map((item) => item.id));
-  };
-
-  useEffect(() => {
-    void loadNews();
-    void loadSaved();
-  }, []);
-
-  const filteredArticles = useMemo(() => {
-    return articles.filter((article) => {
-      const matchesCategory =
-        activeCategory === 'All' ||
-        article.tags.some((tag) => tag.toLowerCase().includes(activeCategory.toLowerCase()));
-
-      const matchesQuery =
-        !query ||
-        `${article.title} ${article.excerpt} ${article.sourceName}`
-          .toLowerCase()
-          .includes(query.toLowerCase());
-
-      return matchesCategory && matchesQuery;
-    });
-  }, [activeCategory, articles, query]);
 
   const featuredIssues = useMemo(() => {
     const issueCategory = activeCategory === 'All' ? undefined : activeCategory;
     return searchIssues(query, issueCategory ? { category: issueCategory } : {}).slice(0, 3);
   }, [activeCategory, query]);
 
-  const toggleSave = async (article: Article) => {
-    if (savedIds.includes(article.id)) {
-      await removeSavedArticle<Article>((item) => item.id === article.id);
-      setSavedIds((current) => current.filter((id) => id !== article.id));
-      return;
-    }
-
-    await saveArticle(article);
-    setSavedIds((current) => [article.id, ...current]);
-  };
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.innerWidth}>
+        <Text style={styles.eyebrow}>MISSOURI CIVIC ENGAGEMENT</Text>
         <Text variant="headlineMedium" style={styles.heading}>VOICE Pulse</Text>
-        <Text style={styles.subtitle}>A student-first guide to understanding issues, officials, and local action.</Text>
-
-        <Card style={styles.banner}>
-          <Card.Content style={styles.bannerContent}>
-            <Text variant="titleSmall" style={styles.bannerTitle}>Demo mode</Text>
-            <Text style={styles.bannerText}>
-              This feed uses demonstration civic data to preview the product experience and should not be treated as live reporting.
-            </Text>
-          </Card.Content>
-        </Card>
+        <Text style={styles.subtitle}>Understand public issues, find the officials who shape them, and make your perspective heard.</Text>
 
         <View style={styles.ctaRow}>
           <Button mode="contained" onPress={() => router.push('/companion')} style={styles.primaryButton} labelStyle={styles.primaryButtonText}>
@@ -96,10 +39,12 @@ export default function HomeScreen() {
           placeholder="Search issue topics"
           value={query}
           onChangeText={setQuery}
+          accessibilityLabel="Search civic issue topics"
+          accessibilityHint="Filters the issue spotlight and civic issues"
           style={styles.search}
           outlineColor={colors.border}
           activeOutlineColor={colors.primary}
-          left={<TextInput.Icon icon="magnify" color={colors.muted} />}
+          left={<TextInput.Icon icon={({ size, color }) => <Search size={size} color={color} />} accessibilityLabel="Search" />}
         />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
@@ -107,6 +52,7 @@ export default function HomeScreen() {
             <Chip
               key={category}
               selected={category === activeCategory}
+              showSelectedCheck={false}
               onPress={() => setActiveCategory(category)}
               style={[styles.chip, category === activeCategory && styles.chipSelected]}
               textStyle={[styles.chipText, category === activeCategory && styles.chipTextSelected]}
@@ -118,71 +64,81 @@ export default function HomeScreen() {
 
         {featuredIssues.length > 0 ? (
           <Card style={styles.issueCard}>
-            <Card.Content style={styles.cardContent}>
-              <Text variant="titleMedium" style={styles.sectionTitle}>Issue spotlight</Text>
-              {featuredIssues.map((issue) => (
-                <View key={issue.id} style={styles.issueRow}>
-                  <Text style={styles.issueTitle}>{issue.title}</Text>
-                  <Text style={styles.issueSummary}>{issue.summary}</Text>
-                  <Button
-                    compact
-                    mode="text"
-                    onPress={() => router.push({ pathname: '/companion', params: { question: `Tell me more about ${issue.title}` } })}
-                    labelStyle={styles.issueAction}
-                  >
-                    Ask VOICE
-                  </Button>
+            <Card.Content style={styles.spotlightContent}>
+              <View style={styles.spotlightHeader}>
+                <View style={styles.spotlightHeadingGroup}>
+                  <View style={styles.spotlightIcon}>
+                    <Compass size={20} color={colors.primary} />
+                  </View>
+                  <View style={styles.spotlightHeadingText}>
+                    <Text variant="titleMedium" style={styles.sectionTitle}>Issue spotlight</Text>
+                    <Text style={styles.spotlightSubtitle}>A place to start exploring civic questions.</Text>
+                  </View>
                 </View>
-              ))}
-            </Card.Content>
-          </Card>
-        ) : null}
+                <Button
+                  mode="text"
+                  onPress={() => router.push('/issues')}
+                  style={styles.allIssuesButton}
+                  contentStyle={styles.allIssuesButtonContent}
+                  labelStyle={styles.allIssuesLabel}
+                >
+                  All issues
+                </Button>
+              </View>
 
-        {loading ? (
-          <Text style={styles.empty}>Loading civic stories...</Text>
-        ) : filteredArticles.length === 0 ? (
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text variant="titleMedium">No stories match this filter</Text>
-              <Text style={styles.cardText}>Try another keyword or reset the category.</Text>
+              {featuredIssues[0] ? (
+                <View style={styles.featuredIssue}>
+                  <Text style={styles.issueKicker}>{featuredIssues[0].category}</Text>
+                  <Text style={styles.featuredIssueTitle}>{featuredIssues[0].title}</Text>
+                  <Text numberOfLines={3} style={styles.issueSummary}>{featuredIssues[0].summary}</Text>
+                  <View style={styles.featuredActions}>
+                    <Button
+                      mode="contained"
+                      icon={({ size, color }) => <Sparkles size={size} color={color} />}
+                      contentStyle={styles.iconLabelContent}
+                      onPress={() => router.push({ pathname: '/companion', params: { issueId: featuredIssues[0].id, question: featuredIssues[0].title, feature: 'explain' } })}
+                      style={styles.featuredPrimaryAction}
+                    >
+                      Understand issue
+                    </Button>
+                    <Button
+                      mode="text"
+                      onPress={() => router.push({ pathname: '/issues/[id]', params: { id: featuredIssues[0].id } })}
+                      labelStyle={styles.issueAction}
+                    >
+                      Issue details
+                    </Button>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.secondaryIssues}>
+                {featuredIssues.slice(1).map((issue) => (
+                  <Pressable
+                    key={issue.id}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Explore ${issue.title}`}
+                    onPress={() => router.push({ pathname: '/issues/[id]', params: { id: issue.id } })}
+                    style={styles.secondaryIssueRow}
+                  >
+                    <View style={styles.secondaryIssueText}>
+                      <Text style={styles.secondaryIssueCategory}>{issue.category}</Text>
+                      <Text numberOfLines={1} style={styles.secondaryIssueTitle}>{issue.title}</Text>
+                      <Text numberOfLines={2} style={styles.secondaryIssueSummary}>{issue.summary}</Text>
+                    </View>
+                    <ArrowRight size={18} color={colors.primary} />
+                  </Pressable>
+                ))}
+              </View>
             </Card.Content>
           </Card>
         ) : (
-          filteredArticles.map((article) => (
-            <Card
-              key={article.id}
-              style={styles.card}
-              onPress={() => router.push({ pathname: '/story/[id]', params: { id: article.id } })}
-            >
-              <Card.Content style={styles.cardContent}>
-                <View style={styles.cardTopRow}>
-                  <Text variant="titleMedium" style={styles.cardTitle}>{article.title}</Text>
-                  <Button
-                    compact
-                    mode={savedIds.includes(article.id) ? 'contained' : 'text'}
-                    onPress={() => void toggleSave(article)}
-                    style={styles.saveButton}
-                    labelStyle={styles.saveLabel}
-                  >
-                    {savedIds.includes(article.id) ? 'Saved' : 'Save'}
-                  </Button>
-                </View>
-
-                <Text style={styles.meta}>{article.sourceName}</Text>
-                <Text style={styles.meta}>{new Date(article.publishedAt).toLocaleDateString()}</Text>
-
-                <Text style={styles.cardText}>{article.excerpt}</Text>
-
-                <View style={styles.tagRow}>
-                  {article.tags.slice(0, 3).map((tag) => (
-                    <Chip key={`${article.id}-${tag}`} compact style={styles.tag} textStyle={styles.tagText}>
-                      {tag}
-                    </Chip>
-                  ))}
-                </View>
-              </Card.Content>
-            </Card>
-          ))
+          <Card style={styles.emptyCard}>
+            <Card.Content>
+              <Text style={styles.emptyTitle}>No issues match your search</Text>
+              <Text style={styles.emptyText}>Try a different topic or choose another category.</Text>
+            </Card.Content>
+          </Card>
         )}
       </View>
     </ScrollView>
@@ -208,15 +164,25 @@ const styles = StyleSheet.create({
     paddingTop: 18,
   },
   heading: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
-    marginBottom: 4,
+    fontSize: 38,
+    lineHeight: 44,
+    marginBottom: 8,
+  },
+  eyebrow: {
+    color: colors.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 16,
+    marginBottom: 8,
   },
   subtitle: {
     marginBottom: spacing.lg,
     color: colors.textSoft,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 24,
+    maxWidth: 620,
   },
   ctaRow: {
     flexDirection: 'row',
@@ -225,48 +191,31 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   primaryButton: {
-    borderRadius: 12,
-    minHeight: 46,
+    borderRadius: radii.md,
+    minHeight: 48,
     flex: 1,
+    minWidth: 150,
     backgroundColor: colors.primary,
   },
   primaryButtonText: {
     fontWeight: '700',
     letterSpacing: 0.2,
+    color: colors.onPrimary,
   },
   secondaryButton: {
-    borderRadius: 12,
-    minHeight: 46,
+    borderRadius: radii.md,
+    minHeight: 48,
     flex: 1,
+    minWidth: 150,
     borderColor: colors.primary,
   },
   secondaryButtonText: {
     color: colors.primary,
     fontWeight: '700',
   },
-  banner: {
-    marginBottom: spacing.lg,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: '#dbe3ff',
-    ...shadows.card,
-  },
-  bannerContent: {
-    paddingVertical: 14,
-  },
-  bannerTitle: {
-    color: colors.primaryStrong,
-    fontWeight: '700',
-  },
-  bannerText: {
-    marginTop: 6,
-    color: colors.muted,
-    lineHeight: 20,
-  },
   search: {
     marginBottom: spacing.md,
-    borderRadius: 14,
+    borderRadius: radii.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -283,7 +232,7 @@ const styles = StyleSheet.create({
   chip: {
     marginRight: 8,
     marginBottom: 8,
-    borderRadius: 999,
+    borderRadius: radii.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -298,30 +247,145 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextSelected: {
-    color: '#fff',
+    color: colors.onPrimary,
   },
   issueCard: {
     marginBottom: spacing.md,
     borderRadius: radii.lg,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#dbeafe',
+    borderColor: colors.border,
+    overflow: 'hidden',
     ...shadows.card,
+  },
+  spotlightContent: {
+    padding: spacing.md,
+  },
+  spotlightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  allIssuesButton: {
+    flexShrink: 0,
+    minWidth: 84,
+    minHeight: 44,
+    marginRight: -spacing.xs,
+  },
+  allIssuesButtonContent: {
+    minWidth: 84,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  allIssuesLabel: {
+    color: colors.primary,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginHorizontal: 0,
+    includeFontPadding: false,
+  },
+  spotlightHeadingGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  spotlightIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  spotlightHeadingText: {
+    flex: 1,
   },
   sectionTitle: {
     color: colors.text,
     fontWeight: '700',
-    marginBottom: 8,
+    lineHeight: 22,
   },
-  issueRow: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  spotlightSubtitle: {
+    marginTop: 2,
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
   },
-  issueTitle: {
+  featuredIssue: {
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  featuredIssueTitle: {
+    color: colors.text,
+    fontSize: 21,
+    lineHeight: 27,
+    fontWeight: '800',
+    maxWidth: 640,
+  },
+  featuredActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  featuredPrimaryAction: {
+    minHeight: 44,
+    borderRadius: radii.md,
+  },
+  iconLabelContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryIssues: {
+    marginTop: spacing.sm,
+  },
+  secondaryIssueRow: {
+    minHeight: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  secondaryIssueText: {
+    flex: 1,
+  },
+  secondaryIssueCategory: {
+    color: colors.primary,
+    textTransform: 'uppercase',
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: '700',
+  },
+  secondaryIssueTitle: {
+    marginTop: 2,
     color: colors.text,
     fontWeight: '700',
-    lineHeight: 22,
+    lineHeight: 20,
+  },
+  secondaryIssueSummary: {
+    marginTop: 2,
+    color: colors.muted,
+    lineHeight: 18,
+    fontSize: 12,
+  },
+  issueKicker: {
+    color: colors.primary,
+    textTransform: 'uppercase',
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   issueSummary: {
     marginTop: 6,
@@ -332,70 +396,20 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
-  card: {
-    marginBottom: spacing.md,
-    borderRadius: radii.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
+  emptyCard: {
+    borderRadius: radii.md,
     borderColor: colors.border,
-    ...shadows.card,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.md,
   },
-  cardContent: {
-    padding: 16,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 8,
-    width: '100%',
-  },
-  cardTitle: {
-    flex: 1,
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '700',
+  emptyTitle: {
     color: colors.text,
+    fontWeight: '700',
   },
-  saveButton: {
-    alignSelf: 'flex-start',
-    minWidth: 72,
-  },
-  saveLabel: {
-    fontWeight: '600',
-  },
-  meta: {
-    marginTop: 6,
+  emptyText: {
     color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  cardText: {
-    marginTop: 10,
-    lineHeight: 22,
-    color: colors.textSoft,
-    fontSize: 15,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: spacing.sm,
-    gap: 8,
-  },
-  tag: {
-    marginRight: 6,
-    marginBottom: 6,
-    backgroundColor: colors.successSoft,
-    borderRadius: 999,
-  },
-  tagText: {
-    color: colors.success,
-    fontWeight: '600',
-    fontSize: 11,
-  },
-  empty: {
-    color: colors.textSoft,
-    marginTop: spacing.sm,
-    fontSize: 15,
+    lineHeight: 20,
+    marginTop: 4,
   },
 });

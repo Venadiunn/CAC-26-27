@@ -1,30 +1,12 @@
-import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const require = createRequire(import.meta.url);
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const dataPath = path.resolve(currentDir, '../data/issues-data.js');
-const source = fs.readFileSync(dataPath, 'utf8');
+const { issueCatalog: issues } = require(path.resolve(currentDir, '../data/issues-data.js'));
 
-const match = source.match(/const issueCatalog = (\[[\s\S]*?\]);\s*const issueCategories =/);
-if (!match) {
-  throw new Error('Unable to find the issue catalog in the data file.');
-}
-
-const issues = Function(`return ${match[1]};`)();
-const categories = issueCatalogFromSource(issues);
-
-function issueCatalogFromSource(catalog) {
-  return catalog.map((issue) => ({
-    id: issue.id,
-    title: issue.title,
-    category: issue.category,
-    summary: issue.summary,
-    sources: Array.isArray(issue.sources) ? issue.sources.length : 0,
-  }));
-}
-
-const countsByCategory = categories.reduce((acc, issue) => {
+const countsByCategory = issues.reduce((acc, issue) => {
   acc[issue.category] = (acc[issue.category] || 0) + 1;
   return acc;
 }, {});

@@ -2,6 +2,8 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Chip, Text, TextInput } from 'react-native-paper';
+import { Search } from 'lucide-react-native';
+import BackButton from '../../components/BackButton';
 import { ISSUE_CATEGORIES, searchIssues } from '../../services/issues';
 import { colors, layout, radii, shadows, spacing } from '../../theme';
 
@@ -51,6 +53,7 @@ export default function IssueBrowserScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.innerWidth}>
+        <BackButton />
         <Text variant="headlineSmall" style={styles.heading}>Issue browser</Text>
         <Text style={styles.subtitle}>Explore Missouri civic issues by category, level, and topic.</Text>
 
@@ -72,8 +75,9 @@ export default function IssueBrowserScreen() {
           placeholder="Search issue titles, keywords, or policy questions"
           value={query}
           onChangeText={setQuery}
+          accessibilityLabel="Search issue titles, keywords, or policy questions"
           style={styles.search}
-          left={<TextInput.Icon icon="magnify" color={colors.muted} />}
+          left={<TextInput.Icon icon={({ size, color }) => <Search size={size} color={color} />} accessibilityLabel="Search" />}
         />
 
         <View style={styles.filterGroup}>
@@ -83,6 +87,7 @@ export default function IssueBrowserScreen() {
               <Chip
                 key={category}
                 selected={category === selectedCategory}
+                showSelectedCheck={false}
                 onPress={() => setSelectedCategory(category)}
                 style={[styles.chip, category === selectedCategory && styles.chipSelected]}
                 textStyle={[styles.chipText, category === selectedCategory && styles.chipTextSelected]}
@@ -100,6 +105,7 @@ export default function IssueBrowserScreen() {
               <Chip
                 key={level}
                 selected={level === selectedLevel}
+                showSelectedCheck={false}
                 onPress={() => setSelectedLevel(level)}
                 style={[styles.chip, level === selectedLevel && styles.chipSelected]}
                 textStyle={[styles.chipText, level === selectedLevel && styles.chipTextSelected]}
@@ -233,7 +239,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextSelected: {
-    color: '#fff',
+    color: colors.onPrimary,
   },
   sortRow: {
     flexDirection: 'row',

@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { PaperProvider } from 'react-native-paper';
+import { AuthProvider } from '../lib/auth-context';
 import { colors } from '../theme';
 
 export default function RootLayout() {
@@ -10,17 +11,33 @@ export default function RootLayout() {
         isV3: true,
         colors: {
           primary: colors.primary,
-          accent: colors.primary,
+          onPrimary: colors.onPrimary,
+          primaryContainer: colors.surfaceAlt,
+          onPrimaryContainer: colors.primary,
+          secondary: colors.secondary,
+          onSecondary: colors.onSecondary,
+          secondaryContainer: colors.secondarySoft,
+          onSecondaryContainer: colors.secondaryStrong,
+          tertiary: colors.primaryHover,
           background: colors.background,
+          onBackground: colors.text,
           surface: colors.surface,
-          text: colors.text,
           onSurface: colors.text,
+          surfaceVariant: colors.surfaceAlt,
+          onSurfaceVariant: colors.textSoft,
           outline: colors.border,
+          outlineVariant: colors.borderStrong,
+          error: colors.danger,
+          onError: colors.onPrimary,
+          surfaceDisabled: colors.disabled,
+          onSurfaceDisabled: colors.onDisabled,
         },
-        roundness: 16,
+        roundness: 12,
       }}
     >
-      <Stack screenOptions={{ headerShown: false }} />
+      <AuthProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </AuthProvider>
     </PaperProvider>
   );
 }

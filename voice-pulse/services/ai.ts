@@ -10,18 +10,25 @@ export type ArticleSummary = {
 
 type GroundingContext = Article | IssueRecord;
 
+export type IssueExplanation = {
+  sections: { title: string; content: string }[];
+  caution: string;
+  grounding: 'interpretation';
+  cached: boolean;
+};
+
 declare const process: { env?: Record<string, string | undefined> } | undefined;
 
-function isSeedMode(): boolean {
-  return typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_USE_SEED_DATA === 'true';
-}
-
 function getLiveAiUrl(): string | null {
-  if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_AI_API_URL) {
-    return process.env.EXPO_PUBLIC_AI_API_URL;
+  const configuredUrl = typeof process !== 'undefined' ? process.env?.EXPO_PUBLIC_AI_API_URL?.trim() : '';
+  if (configuredUrl) {
+    return configuredUrl.endsWith('/api/ai') ? configuredUrl : `${configuredUrl.replace(/\/$/, '')}/api/ai`;
   }
 
   if (typeof window !== 'undefined' && window.location?.origin) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:3000/api/ai';
+    }
     return `${window.location.origin}/api/ai`;
   }
 
@@ -30,19 +37,40 @@ function getLiveAiUrl(): string | null {
 
 async function callLiveAi<T>(payload: Record<string, unknown>): Promise<T> {
   const apiUrl = getLiveAiUrl();
-  if (!apiUrl || isSeedMode()) {
-    throw new Error('Live AI is disabled');
+  if (!apiUrl) {
+    throw new Error('AI is not configured. Set EXPO_PUBLIC_AI_API_URL to the server-side AI route.');
   }
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  let response: Response;
+  try {
+    response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('The AI request took too long. Please try again.');
+    }
+    throw new Error('The AI service is unavailable. Check the server route and try again.');
+  } finally {
+    clearTimeout(timeout);
+  }
 
-  const data = await response.json().catch(() => ({}));
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('The AI route returned a non-JSON response. Expo Metro does not serve API routes; start the Vercel API locally and set EXPO_PUBLIC_AI_API_URL.');
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!data || typeof data !== 'object') {
+      throw new Error('The AI route returned an invalid response. Please retry.');
+    }
 
   if (!response.ok) {
     throw new Error(data?.error || 'AI request failed');
@@ -51,53 +79,33 @@ async function callLiveAi<T>(payload: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-function isIssueContext(value?: GroundingContext): value is IssueRecord {
-  return !!value && 'category' in value && 'policyQuestions' in value;
-}
-
-function buildContextSummary(context?: GroundingContext): string {
-  if (!context) {
-    return 'General Missouri civic context.';
-  }
-
-  if (isIssueContext(context)) {
-    return `Issue context: ${context.title}. Category: ${context.category}. Summary: ${context.summary}. Government levels: ${context.governmentLevels.join(', ') || 'not specified in the current catalog'}.`;
-  }
-
-  return `Article context: ${context.title}. Topic tags: ${context.tags.join(', ')}. Source: ${context.sourceName}.`;
-}
-
 export async function generateArticleSummary(article: Article): Promise<ArticleSummary> {
-  const subjectLine = article.tags.join(', ');
+  const data = await callLiveAi<ArticleSummary>({
+    kind: 'summarize_article',
+    article,
+  });
 
-  if (getLiveAiUrl() && !isSeedMode()) {
-    try {
-      const result = await callLiveAi<{ title: string; overview: string; bullets: string[]; caution: string }>({
-        kind: 'summarize_article',
-        article,
-      });
+  return data;
+}
 
-      return result;
-    } catch {
-      // Fall through to the local seed summary if the live endpoint is unreachable.
-    }
+export async function explainIssue(issue: IssueRecord, question = ''): Promise<IssueExplanation> {
+  const response = await callLiveAi<IssueExplanation>({
+    kind: 'explain_issue',
+    issue: {
+      title: issue.title,
+      category: issue.category,
+      summary: issue.summary,
+      governmentLevels: issue.governmentLevels,
+      policyQuestions: issue.policyQuestions,
+      sources: issue.sources,
+    },
+    question: question.trim(),
+  });
+
+  if (!Array.isArray(response.sections) || response.sections.length === 0 || response.sections.some((section) => !section.title || !section.content)) {
+    throw new Error('The AI response was incomplete. Please retry.');
   }
-
-  const topicLine = article.tags.join(', ');
-
-  return {
-    title: article.title,
-    overview:
-      'This demo summary is AI-generated and intended for educational use. It is not an official reporting summary and should be checked against the original source before being treated as a factual statement.',
-    bullets: [
-      `What happened: ${article.excerpt}`,
-      `Why it matters: The issue touches ${topicLine}, which affects students, families, and local decision-makers.`,
-      `Who is affected: community members, school leaders, and public officials in ${article.jurisdictions.join(', ')}.`,
-      'What remains uncertain: the exact policy outcome depends on action by local, state, or federal offices.',
-    ],
-    caution:
-      'Use this summary as a guide to understanding the issue, not as a replacement for the underlying source material.',
-  };
+  return response;
 }
 
 export async function askCompanion(
@@ -112,48 +120,16 @@ export async function askCompanion(
       grounding: 'interpretation',
       citations: context && 'sourceUrl' in context
         ? [{ title: context.title, url: context.sourceUrl }]
-        : [{ title: 'Missouri civic guide', url: 'https://example.com/civic-guide' }],
+        : [{ title: 'Missouri state government overview', url: 'https://www.mo.gov/' }],
       cached: true,
     };
   }
 
-  if (getLiveAiUrl() && !isSeedMode()) {
-    try {
-      const response = await callLiveAi<AskCompanionResponse>({
-        kind: 'ask_companion',
-        question: normalizedQuestion,
-        context,
-      });
-
-      if (response?.answer) {
-        return response;
-      }
-    } catch {
-      // Fall through to the local seed explanation when the live endpoint is unavailable.
-    }
-  }
-
-  const issueContext = isIssueContext(context) ? context : null;
-  const issueContextBlock = issueContext
-    ? `Issue framing: ${issueContext.title}. Category: ${issueContext.category}. The issue is described as: ${issueContext.summary}. Relevant government levels: ${issueContext.governmentLevels.join(', ') || 'not specified'}.`
-    : buildContextSummary(context);
-
-  const answer = issueContext
-    ? `${issueContextBlock} This answer is explanatory context rather than a verified legal or agency determination. It should be checked against the source list provided below and the relevant Missouri government materials for any final or procedural claim. A fair civic response should note the policy question, the decision-makers involved, and what evidence is missing or still uncertain.`
-    : `${buildContextSummary(context)} This answer is general background information and should be paired with official source material before relying on it for a legal, budgetary, or procedural claim.`;
-
-  const citations = issueContext
-    ? issueContext.sources.map((source) => ({ title: source.name, url: source.url }))
-    : context && 'sourceUrl' in context
-      ? [{ title: context.title, url: context.sourceUrl }]
-      : [{ title: 'Missouri state government overview', url: 'https://www.mo.gov/' }];
-
-  return {
-    answer: `${answer} User question: ${normalizedQuestion}`,
-    grounding: 'interpretation',
-    citations,
-    cached: true,
-  };
+  return callLiveAi<AskCompanionResponse>({
+    kind: 'ask_companion',
+    question: normalizedQuestion,
+    context,
+  });
 }
 
 export async function generateAdvocacyDraft({
@@ -161,50 +137,38 @@ export async function generateAdvocacyDraft({
   officialId,
   userNotes,
   issueTitle,
+  issueSummary,
+  personalPerspective,
+  requestedAction,
+  tone,
+  officialName,
+  officialOffice,
+  officialJurisdiction,
 }: {
   articleId: string;
   officialId: string;
   userNotes?: string;
   issueTitle?: string;
+  issueSummary?: string;
+  personalPerspective?: string;
+  requestedAction?: string;
+  tone?: 'professional' | 'persuasive' | 'concise' | 'community-focused';
+  officialName?: string;
+  officialOffice?: string;
+  officialJurisdiction?: string;
 }): Promise<GenerateAdvocacyResponse> {
-  if (getLiveAiUrl() && !isSeedMode()) {
-    try {
-      const response = await callLiveAi<GenerateAdvocacyResponse>({
-        kind: 'generate_advocacy_draft',
-        articleId,
-        officialId,
-        userNotes,
-        issueTitle,
-      });
-
-      if (response?.body) {
-        return response;
-      }
-    } catch {
-      // Fall back to the local draft generator when the live endpoint is unavailable.
-    }
-  }
-
-  const subject = issueTitle ? `Student perspective on ${issueTitle}` : `Student perspective on ${articleId.replace(/-/g, ' ')}`;
-  const body = [
-    'Dear [Official Name],',
-    '',
-    'I am writing to share a student perspective on a civic issue that affects my community and future opportunities.',
-    userNotes ||
-      'I believe public officials should make decisions that are transparent, responsive, and centered on the needs of residents and students.',
-    '',
-    'I am asking for attention to this issue, a clear explanation of next steps, and information about how community members can participate in the process.',
-    '',
-    'Thank you for your time and service. I appreciate your attention to this matter.',
-    '',
-    'Sincerely,',
-    'VOICE Pulse user',
-  ].join('\n');
-
-  return {
-    subject,
-    body,
-    grounding: 'interpretation',
-    cached: true,
-  };
+  return callLiveAi<GenerateAdvocacyResponse>({
+    kind: 'generate_advocacy_draft',
+    articleId,
+    officialId,
+    userNotes,
+    issueTitle,
+    issueSummary,
+    personalPerspective,
+    requestedAction,
+    tone: tone ?? 'professional',
+    officialName,
+    officialOffice,
+    officialJurisdiction,
+  });
 }

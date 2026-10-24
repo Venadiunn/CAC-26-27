@@ -2,8 +2,9 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Text } from 'react-native-paper';
+import BackButton from '../../components/BackButton';
 import { getSavedArticles, removeSavedArticle, saveArticle } from '../../lib/storage';
-import { demoOfficials } from '../../services/officials';
+import { missouriHouseOfficials } from '../../services/officials';
 import { generateArticleSummary } from '../../services/ai';
 import { getArticleById } from '../../services/news';
 import { colors, layout, radii, shadows, spacing } from '../../theme';
@@ -29,6 +30,7 @@ export default function StoryDetailScreen() {
   if (!article) {
     return (
       <View style={styles.emptyState}>
+        <BackButton />
         <Text variant="headlineMedium">Story not found</Text>
       </View>
     );
@@ -48,12 +50,13 @@ export default function StoryDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.innerWidth}>
+        <BackButton />
         <Text variant="headlineMedium" style={styles.heading}>{article.title}</Text>
         <Text style={styles.meta}>{article.sourceName}</Text>
         <Text style={styles.meta}>{new Date(article.publishedAt).toLocaleDateString()}</Text>
 
         <View style={styles.actionRow}>
-          <Button mode="contained" onPress={() => void toggleSave()} style={styles.primaryButton}>
+          <Button mode="contained" buttonColor={saved ? colors.secondary : colors.primary} onPress={() => void toggleSave()} style={styles.primaryButton}>
             {saved ? 'Saved' : 'Save article'}
           </Button>
           <Button mode="outlined" onPress={() => void Linking.openURL(article.sourceUrl)} style={styles.secondaryButton}>
@@ -92,7 +95,7 @@ export default function StoryDetailScreen() {
         <Card style={styles.card}>
           <Card.Content style={styles.cardContent}>
             <Text variant="titleMedium" style={styles.sectionTitle}>Relevant officials</Text>
-            {demoOfficials.slice(0, 2).map((official) => (
+            {missouriHouseOfficials.slice(0, 2).map((official) => (
               <Text key={official.id} style={styles.listItem}>
                 {official.fullName} — {official.officeTitle}
               </Text>

@@ -18,6 +18,7 @@ export type IssueRecord = {
   sources: IssueSource[];
   relatedIssues: string[];
   lastVerified: string;
+  catalogMissing?: boolean;
 };
 
 export const issueRecords: IssueRecord[] = issueCatalog as IssueRecord[];

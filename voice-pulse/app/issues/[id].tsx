@@ -2,43 +2,71 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Chip, Text } from 'react-native-paper';
+import BackButton from '../../components/BackButton';
 import { getSavedIssues, removeSavedIssue, saveIssue } from '../../lib/storage';
+import { useAuth } from '../../lib/auth-context';
 import { getIssueById, type IssueRecord } from '../../services/issues';
 import { colors, layout, radii, shadows, spacing } from '../../theme';
 
 export default function IssueDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { session, loading: authLoading, syncing } = useAuth();
   const [issue, setIssue] = useState<IssueRecord | null>(null);
   const [saved, setSaved] = useState(false);
+  const [storageError, setStorageError] = useState('');
 
   useEffect(() => {
+    if (authLoading || syncing) {
+      return;
+    }
+
+    let active = true;
+    setSaved(false);
+    setStorageError('');
     void (async () => {
       const selected = id ? getIssueById(id) : undefined;
       setIssue(selected ?? null);
 
-      const savedIssues = await getSavedIssues<IssueRecord>();
-      setSaved(savedIssues.some((item) => item.id === id));
+      try {
+        const savedIssues = await getSavedIssues<IssueRecord>();
+        if (active) {
+          setSaved(savedIssues.some((item) => item.id === id));
+        }
+      } catch (error) {
+        if (active) {
+          setStorageError(error instanceof Error ? error.message : 'Could not load saved status.');
+        }
+      }
     })();
-  }, [id]);
+    return () => {
+      active = false;
+    };
+  }, [id, session?.user.id, authLoading, syncing]);
 
   if (!issue) {
     return (
       <View style={styles.emptyState}>
+        <BackButton />
         <Text variant="headlineMedium">Issue not found</Text>
       </View>
     );
   }
 
   const toggleSave = async () => {
-    if (saved) {
-      await removeSavedIssue<IssueRecord>((item) => item.id === issue.id);
-      setSaved(false);
-      return;
-    }
+    setStorageError('');
+    try {
+      if (saved) {
+        await removeSavedIssue<IssueRecord>((item) => item.id === issue.id);
+        setSaved(false);
+        return;
+      }
 
-    await saveIssue(issue);
-    setSaved(true);
+      await saveIssue(issue);
+      setSaved(true);
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : 'Could not update saved issue.');
+    }
   };
 
   const whyItMatters = [
@@ -50,17 +78,19 @@ export default function IssueDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.innerWidth}>
+        <BackButton />
         <Text variant="headlineMedium" style={styles.heading}>{issue.title}</Text>
         <Text style={styles.category}>{issue.category}</Text>
 
         <View style={styles.actionRow}>
-          <Button mode="contained" onPress={() => void toggleSave()} style={styles.primaryButton}>
+          <Button mode="contained" buttonColor={saved ? colors.secondary : colors.primary} onPress={() => void toggleSave()} style={styles.primaryButton}>
             {saved ? 'Saved issue' : 'Save issue'}
           </Button>
-          <Button mode="outlined" onPress={() => router.push({ pathname: '/companion', params: { issueId: issue.id, question: issue.title } })} style={styles.secondaryButton}>
-            Ask AI
+          <Button mode="outlined" onPress={() => router.push({ pathname: '/companion', params: { issueId: issue.id, question: issue.title, feature: 'explain' } })} style={styles.secondaryButton}>
+            Understand this issue
           </Button>
         </View>
+        {storageError ? <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text> : null}
 
         <Card style={styles.card}>
           <Card.Content style={styles.cardContent}>
@@ -170,6 +200,11 @@ const styles = StyleSheet.create({
   heading: {
     color: colors.text,
     fontWeight: '700',
+  },
+  error: {
+    color: colors.warning,
+    lineHeight: 20,
+    marginBottom: spacing.md,
   },
   category: {
     marginTop: 8,
